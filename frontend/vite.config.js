@@ -8,20 +8,11 @@ export default defineConfig({
     port: 5173,
     proxy: {
       "/api": {
-        target: "http://localhost:8000", // backend
+        target: "http://localhost:8000", 
         changeOrigin: true,
         secure: false,
-        rewrite: (path) => path.replace(/^\/api/, "/api/v1"), // map /api/... -> /api/v1/...
+        rewrite: (path) => path.replace(/^\/api/, "/api/v1"),
       },
     },
   },
 });
-
-// import { defineConfig } from 'vite'
-// import tailwindcss from '@tailwindcss/vite'
-
-// export default defineConfig({
-//   plugins: [
-//     tailwindcss(),
-//   ],
-// })
