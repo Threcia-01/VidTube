@@ -1,0 +1,8 @@
+@import "tailwindcss";
+
+/* optional helper */
+html,
+body,
+#root {
+  height: 100%;
+}

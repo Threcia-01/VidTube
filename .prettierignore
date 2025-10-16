@@ -1,7 +1,18 @@
-/.vscode
-/node_modules
-./dist
+# IDE and system
+.vscode/
+.idea/
 
-*.env
+# Node modules and build outputs
+node_modules/
+dist/
+build/
+
+# Environment files
 .env
 .env.*
+*.env
+
+# Logs and cache
+*.log
+.vite/
+.next/
