@@ -1,45 +1,34 @@
-// ChannelInfo.jsx
 import React, { useState, useContext, useEffect } from "react";
 import { ThumbsUp, ThumbsDown } from "lucide-react";
 import { youtubeContext } from "../contexts/vidtubeContext";
 
-export default function ChannelInfo({ channel }) {
+export default function ChannelInfo({ channel, videoId }) {
   const { api, user } = useContext(youtubeContext);
 
   const [liked, setLiked] = useState(false);
-  const [likeCount, setLikeCount] = useState(channel?.likes ?? 0);
+  const [likeCount, setLikeCount] = useState(null); 
   const [subscribed, setSubscribed] = useState(false);
-  const [subscriberCount, setSubscriberCount] = useState(
-    channel?.subscribers ?? 0,
-  );
+  const [subscriberCount, setSubscriberCount] = useState(channel?.subscribers ?? 0);
   const channelId = channel?._id;
 
-  // Fetch initial like & subscription state and subscriber count
+  // Fetch subscription status 
   useEffect(() => {
-    setLikeCount(channel?.likes ?? 0);
-    setSubscriberCount(channel?.subscribers ?? 0);
-
     if (!channelId || !user) return;
 
     let mounted = true;
-    
-    // Fetch the list of channels the current user is subscribed to
-    const fetchStatuses = async () => {
+
+    const fetchSubscriptionStatus = async () => {
       try {
         const res = await api.get(`/subscriptions/c/${channelId}`);
         if (!mounted) return;
 
         const subscribers = res.data?.subscribers ?? res.data?.count ?? null;
         const subscribersList =
-          res.data?.subscribersList ??
-          res.data?.subscribersList ??
-          res.data?.list ??
-          null;
+          res.data?.subscribersList ?? res.data?.list ?? null;
 
         if (typeof subscribers === "number") setSubscriberCount(subscribers);
 
         if (Array.isArray(subscribersList)) {
-
           const isSubscribed = subscribersList.some((s) => {
             if (!s) return false;
             if (typeof s === "string") return s === user._id;
@@ -54,34 +43,41 @@ export default function ChannelInfo({ channel }) {
         const channels = fallback.data?.channels ?? fallback.data?.list ?? [];
         setSubscribed(channels.some((c) => c._id === channelId));
       } catch (err) {
-        console.error("Failed to fetch subscription/like status:", err);
+        console.error("Failed to fetch subscription status:", err);
       }
     };
 
-    // fetch like status 
-    const fetchLikeStatus = async () => {
-      try {
-        const likeRes = await api.get(`/likes/status/v/${channelId}`);
-        if (!mounted) return;
-        setLiked(Boolean(likeRes.data?.liked));
-        setLikeCount((prev) =>
-          typeof likeRes.data?.likes === "number" ? likeRes.data.likes : prev,
-        );
-      } catch (err) {
-      }
-    };
+    fetchSubscriptionStatus();
 
-    fetchStatuses();
-    fetchLikeStatus();
-
-    return () => {
-      mounted = false;
-    };
+    return () => { mounted = false };
   }, [channelId, user, api]);
 
+  // Fetch like status 
+  useEffect(() => {
+    if (!videoId || !user) return;
+
+    let mounted = true;
+
+    const fetchLikeStatus = async () => {
+      try {
+        const likeRes = await api.get(`/likes/status/v/${videoId}`); 
+        if (!mounted) return;
+        setLiked(Boolean(likeRes.data?.liked));
+        setLikeCount(typeof likeRes.data?.likes === "number" ? likeRes.data.likes : 0); 
+      } catch (err) {
+        console.error("Failed to fetch like status:", err);
+        setLiked(false);
+        setLikeCount(0); 
+      }
+    };
+
+    fetchLikeStatus();
+
+    return () => { mounted = false };
+  }, [videoId, user, api]); 
   if (!channel) return null;
 
-  // Subscribe/unsubscribe handler 
+  // Subscribe/unsubscribe handler
   const handleSubscribe = async () => {
     if (!user) return alert("Please log in to subscribe");
     if (!channelId) return;
@@ -90,22 +86,15 @@ export default function ChannelInfo({ channel }) {
     const prevCount = subscriberCount;
 
     setSubscribed(!prevSubscribed);
-    setSubscriberCount(
-      prevSubscribed ? Math.max(0, prevCount - 1) : prevCount + 1,
-    );
+    setSubscriberCount(prevSubscribed ? Math.max(0, prevCount - 1) : prevCount + 1);
 
     try {
       const res = await api.post(`/subscriptions/toggle/${channelId}`);
       const serverSubscribed = res.data?.subscribed;
       const serverCount = res.data?.subscribers ?? res.data?.count ?? null;
 
-      if (typeof serverSubscribed === "boolean") {
-        setSubscribed(serverSubscribed);
-      }
-
-      if (typeof serverCount === "number") {
-        setSubscriberCount(serverCount);
-      }
+      if (typeof serverSubscribed === "boolean") setSubscribed(serverSubscribed);
+      if (typeof serverCount === "number") setSubscriberCount(serverCount);
     } catch (error) {
       console.error("Subscription toggle failed:", error);
       setSubscribed(prevSubscribed);
@@ -116,7 +105,7 @@ export default function ChannelInfo({ channel }) {
   // Like/unlike handler 
   const handleLike = async () => {
     if (!user) return alert("Please log in to like videos");
-    if (!channelId) return;
+    if (!videoId) return;
 
     const prevLiked = liked;
     const prevLikeCount = likeCount;
@@ -126,7 +115,7 @@ export default function ChannelInfo({ channel }) {
     setLikeCount((prev) => (newLiked ? prev + 1 : Math.max(0, prev - 1)));
 
     try {
-      await api.post(`/likes/toggle/v/${channelId}`, {
+      await api.post(`/likes/toggle/v/${videoId}`, {
         action: newLiked ? "like" : "unlike",
       });
     } catch (error) {
@@ -145,16 +134,12 @@ export default function ChannelInfo({ channel }) {
       />
       <div>
         <h3 className="font-normal">{channel.fullName || channel.username}</h3>
-        <div className="text-sm text-gray-500">
-          {subscriberCount} subscribers
-        </div>
+        <div className="text-sm text-gray-500">{subscriberCount} subscribers</div>
       </div>
 
       <button
         className={`ml-auto px-4 py-1 rounded ${
-          subscribed
-            ? "bg-gray-400 text-white"
-            : "bg-red-500 text-white hover:bg-red-600"
+          subscribed ? "bg-gray-400 text-white" : "bg-red-500 text-white hover:bg-red-600"
         }`}
         onClick={handleSubscribe}
       >
@@ -165,9 +150,7 @@ export default function ChannelInfo({ channel }) {
         <button
           onClick={handleLike}
           className={`flex items-center gap-1 px-3 py-1 rounded transition ${
-            liked
-              ? "bg-blue-500 text-white"
-              : "bg-gray-200 text-gray-700 hover:bg-blue-400"
+            liked ? "bg-blue-500 text-white" : "bg-gray-200 text-gray-700 hover:bg-blue-400"
           }`}
         >
           <ThumbsUp className="w-4 h-4" />

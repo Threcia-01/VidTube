@@ -1,5 +1,5 @@
-// VideoPlayer.jsx
-import React, { useEffect, useState, useContext } from "react";
+// src/pages/VideoPlayer.jsx
+import React, { useEffect, useState, useContext, useRef } from "react";
 import { useParams, useLocation, useNavigate } from "react-router-dom";
 import { youtubeContext } from "../contexts/vidtubeContext";
 import Navbar from "../components/Navbar";
@@ -14,18 +14,22 @@ export default function VideoPlayer() {
   const { id } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
+
   const {
     currentVideo,
     fetchVideoById,
     fetchChannelProfile,
+    fetchVideos,
     videos,
     setCurrentVideo,
-    api, 
+    api,
   } = useContext(youtubeContext);
 
   const [channel, setChannel] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const hasIncrementedRef = useRef(false); 
 
+  // Load video by ID or route state
   useEffect(() => {
     const videoFromState = location?.state?.video;
     if (videoFromState?._id) {
@@ -35,12 +39,21 @@ export default function VideoPlayer() {
     }
   }, [id, location.state, fetchVideoById, setCurrentVideo]);
 
+  // Fetch all videos for recommendations if empty
+  useEffect(() => { 
+    if (!videos.length) { 
+      fetchVideos(); 
+    } 
+  }, [videos.length, fetchVideos]); 
+
+  // Sync route with current video ID
   useEffect(() => {
     if (currentVideo?._id && currentVideo._id !== id) {
       navigate(`/videos/${currentVideo._id}`, { replace: true });
     }
   }, [currentVideo, id, navigate]);
 
+  // Fetch channel details for current video
   useEffect(() => {
     if (!currentVideo) {
       setChannel(null);
@@ -53,6 +66,7 @@ export default function VideoPlayer() {
       fullName: "Unknown User",
       avatar: "",
     };
+
     setChannel({
       _id: owner._id,
       name: owner.fullName || owner.username,
@@ -70,15 +84,37 @@ export default function VideoPlayer() {
     })();
   }, [currentVideo, fetchChannelProfile]);
 
-  // Track video views
+  // Reset + increment view count
   useEffect(() => {
-    if (currentVideo?._id && api) {
-      api.post(`/videos/${currentVideo._id}/view`).catch(console.error);
+    const vidId = currentVideo?._id;
+    if (!vidId || !api) return;
+
+    const viewedKey = `vidtube_viewed_${vidId}`; 
+
+    if (sessionStorage.getItem(viewedKey)) {
+      hasIncrementedRef.current = true;
+      return;
     }
+    if (hasIncrementedRef.current) return;
+    hasIncrementedRef.current = true;
+
+    api
+      .post(`/videos/${vidId}/view`)
+      .then(() => {
+        try {
+          sessionStorage.setItem(viewedKey, "1");
+        } catch (e) {
+        }
+      })
+      .catch((err) => {
+        hasIncrementedRef.current = false;
+        console.error("increment view failed:", err);
+      });
   }, [currentVideo?._id, api]);
 
+  // Handle next/recommended video click
   const handleNextVideo = (video) => {
-    if (!video?._id) return; 
+    if (!video?._id) return;
     setCurrentVideo(video);
     navigate(`/videos/${video._id}`, { state: { video } });
   };
@@ -99,7 +135,7 @@ export default function VideoPlayer() {
           {currentVideo?._id ? (
             <>
               <VideoScreen video={currentVideo} />
-              <ChannelInfo channel={channel} />
+              <ChannelInfo channel={channel} videoId={currentVideo?._id} /> 
               <Description description={currentVideo.description} />
               <CommentSection videoId={currentVideo._id} />
             </>
